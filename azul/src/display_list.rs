@@ -45,6 +45,7 @@ use {
     text_cache::TextInfo,
     compositor::new_opengl_texture_id,
     window::{Window, WindowInfo, FakeWindow, ScrollStates, HidpiAdjustedBounds},
+    window_state::WindowSize,
 };
 
 const DEFAULT_FONT_COLOR: StyleTextColor = StyleTextColor(StyleColorU { r: 0, b: 0, g: 0, a: 255 });
@@ -275,7 +276,7 @@ impl<'a, T: Layout + 'a> DisplayList<'a, T> {
         push_rectangles_into_displaylist(
             &laid_out_rectangles,
             window.internal.epoch,
-            window.state.size.hidpi_factor,
+            window.state.size,
             rects_in_rendering_order,
             &mut scrollable_nodes,
             &mut window.scroll_states,
@@ -680,7 +681,7 @@ fn test_overflow_parsing() {
 fn push_rectangles_into_displaylist<'a, 'b, 'c, 'd, 'e, 'f, T: Layout>(
     solved_rects: &NodeDataContainer<LayoutRect>,
     epoch: Epoch,
-    hidpi_factor: f64,
+    window_size: WindowSize,
     content_grouped_rectangles: ContentGroupOrder,
     scrollable_nodes: &mut ScrolledNodes,
     scroll_states: &mut ScrollStates,
@@ -700,7 +701,7 @@ fn push_rectangles_into_displaylist<'a, 'b, 'c, 'd, 'e, 'f, T: Layout>(
             item: RenderableNodeId,
             solved_rects_data: &NodeDataContainer<LayoutRect>,
             epoch: Epoch,
-            hidpi_factor: f64,
+            window_size: WindowSize,
             scrollable_nodes: &mut ScrolledNodes,
             referenced_content: &DisplayListParametersRef<'a,'b,'c,'d,'e, T>,
             referenced_mutable_content: &mut DisplayListParametersMut<'f, T>,
@@ -712,7 +713,7 @@ fn push_rectangles_into_displaylist<'a, 'b, 'c, 'd, 'e, 'f, T: Layout>(
                 epoch,
                 rect_idx: item.node_id,
                 html_node: &html_node.node_type,
-                hidpi_factor,
+                window_size,
             };
 
             displaylist_handle_rect(solved_rect, scrollable_nodes, rectangle, referenced_content, referenced_mutable_content);
@@ -738,7 +739,7 @@ fn push_rectangles_into_displaylist<'a, 'b, 'c, 'd, 'e, 'f, T: Layout>(
         push_rect(content_group.root,
                   solved_rects,
                   epoch,
-                  hidpi_factor,
+                  window_size,
                   scrollable_nodes,
                   referenced_content,
                   referenced_mutable_content,
@@ -748,7 +749,7 @@ fn push_rectangles_into_displaylist<'a, 'b, 'c, 'd, 'e, 'f, T: Layout>(
             push_rect(item,
                       solved_rects,
                       epoch,
-                      hidpi_factor,
+                      window_size,
                       scrollable_nodes,
                       referenced_content,
                       referenced_mutable_content,
@@ -838,7 +839,7 @@ pub(crate) struct DisplayListRectParams<'a, T: 'a + Layout> {
     pub epoch: Epoch,
     pub rect_idx: NodeId,
     pub html_node: &'a NodeType<T>,
-    hidpi_factor: f64,
+    window_size: WindowSize,
 }
 
 fn get_clip_region<'a>(bounds: LayoutRect, rect: &DisplayRectangle<'a>) -> Option<ComplexClipRegion> {
@@ -871,7 +872,7 @@ fn displaylist_handle_rect<'a,'b,'c,'d,'e,'f,'g, T: Layout>(
     } = referenced_content;
 
     let DisplayListRectParams {
-        epoch, rect_idx, html_node, hidpi_factor,
+        epoch, rect_idx, html_node, window_size,
     } = rectangle;
 
     let rect = &display_rectangle_arena[rect_idx];
@@ -1058,7 +1059,7 @@ fn push_opengl_texture<'a,'b,'c,'d,'e,'f,'g, T: Layout>(
     use compositor::{ActiveTexture, ACTIVE_GL_TEXTURES};
     use gleam::gl;
 
-    let bounds = HidpiAdjustedBounds::from_bounds(info.rect, rectangle.hidpi_factor);
+    let bounds = HidpiAdjustedBounds::from_bounds(info.rect, rectangle.window_size.hidpi_factor);
 
     let texture;
 
@@ -1122,7 +1123,7 @@ fn push_iframe<'a,'b,'c,'d,'e,'f,'g, T: Layout>(
 {
     use glium::glutin::dpi::{LogicalPosition, LogicalSize};
 
-    let bounds = HidpiAdjustedBounds::from_bounds(info.rect, rectangle.hidpi_factor);
+    let bounds = HidpiAdjustedBounds::from_bounds(info.rect, rectangle.window_size.hidpi_factor);
 
     let new_dom;
 
@@ -1182,7 +1183,7 @@ fn push_iframe<'a,'b,'c,'d,'e,'f,'g, T: Layout>(
     push_rectangles_into_displaylist(
         &laid_out_rectangles,
         rectangle.epoch,
-        rectangle.hidpi_factor,
+        rectangle.window_size,
         rects_in_rendering_order,
         &mut scrollable_nodes,
         &mut ScrollStates::new(),
