@@ -80,13 +80,18 @@ impl_display! { CssPseudoSelectorParseError<'a>, {
     UnclosedBracesNthChild(e) => format!(":nth-child has unclosed braces: ':{}'", e),
 }}
 
-fn pseudo_selector_from_str(data: &str) -> Result<CssPathPseudoSelector, CssPseudoSelectorParseError> {
+fn pseudo_selector_from_str<'a>(data: &'a str, value: Option<&'a str>) -> Result<CssPathPseudoSelector, CssPseudoSelectorParseError<'a>> {
     match data {
         "first" => Ok(First),
         "last" => Ok(Last),
         "hover" => Ok(Hover),
         "active" => Ok(Active),
         "focus" => Ok(Focus),
+        "nth-child" => if let Some(val) = value {
+                parse_nth_child_selector(val)
+            } else {
+                Err(CssPseudoSelectorParseError::UnknownSelector("nth-child()".to_string()))
+            },
         other => Err(CssPseudoSelectorParseError::UnknownSelector(other.to_string())),
     }
 }
@@ -126,26 +131,30 @@ fn parse_nth_child_selector(input: &str) -> Result<CssPathPseudoSelector, CssPse
 #[test]
 fn test_css_pseudo_selector_parse() {
     let ok_res = [
-        ("first", First),
-        ("last", Last),
-        ("hover", Hover),
-        ("active", Active),
-        ("focus", Focus),
+        ("first", None, First),
+        ("last", None, Last),
+        ("hover", None, Hover),
+        ("active", None, Active),
+        ("focus", None, Focus),
+        ("nth-child", Some("4"), NthChild(Number(4))),
+        ("nth-child", Some("4"), NthChild(Number(4))),
+        ("nth-child", Some("4"), NthChild(Number(4))),
     ];
 
     let err = [
-        ("asdf", CssPseudoSelectorParseError::UnknownSelector("asdf".to_string())),
-        ("", CssPseudoSelectorParseError::UnknownSelector("".to_string())),
+        ("asdf", None, CssPseudoSelectorParseError::UnknownSelector("asdf".to_string())),
+        ("", None, CssPseudoSelectorParseError::UnknownSelector("".to_string())),
+        ("nth-child", None, CssPseudoSelectorParseError::UnknownSelector("nth-child()".to_string())),
         // Can't test for ParseIntError because the fields are private.
         // This is an example on why you shouldn't use std::error::Error!
     ];
 
-    for (s, a) in &ok_res {
-        assert_eq!(pseudo_selector_from_str(s), Ok(*a));
+    for (d, v, a) in &ok_res {
+        assert_eq!(pseudo_selector_from_str(d, *v), Ok(*a));
     }
 
-    for (s, e) in &err {
-        assert_eq!(pseudo_selector_from_str(s), Err(e.clone()));
+    for (d, v, e) in &err {
+        assert_eq!(pseudo_selector_from_str(d, *v), Err(e.clone()));
     }
 }
 
@@ -281,17 +290,11 @@ fn new_from_str_inner<'a>(css_string: &'a str, tokenizer: &mut Tokenizer<'a>) ->
                         }
                         last_path.push(CssPathSelector::Children);
                     },
-                    Token::PseudoClass(pseudo_class) => {
+                    Token::PseudoClass{ selector, value } => {
                         if parser_in_block {
                             return Err(CssParseErrorInner::MalformedCss);
                         }
-                        last_path.push(CssPathSelector::PseudoSelector(pseudo_selector_from_str(pseudo_class)?));
-                    },
-                    Token::NthChildPseudoClass(nth_child) => {
-                        if parser_in_block {
-                            return Err(CssParseErrorInner::MalformedCss);
-                        }
-                        last_path.push(CssPathSelector::PseudoSelector(parse_nth_child_selector(nth_child)?));
+                        last_path.push(CssPathSelector::PseudoSelector(pseudo_selector_from_str(selector, value)?));
                     },
                     Token::Declaration(key, val) => {
                         if !parser_in_block {
